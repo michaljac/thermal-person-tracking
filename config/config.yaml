@@ -1,0 +1,30 @@
+
+paths:
+  input_video: "videos/input/input_h264.mp4"
+  output_video: "videos/output/detection.mp4"
+  model: "models/yolo11n.pt"
+
+detector:
+  confidence_threshold: 0.3
+  image_size: 640
+  classes: [0]
+  device: "cpu"
+
+video:
+  default_fps: 30.0
+  output_codec: "mp4v"
+
+visualization:
+  bbox_color: [0, 255, 0]
+  bbox_thickness: 2
+  font_scale: 0.6
+  text_thickness: 2
+
+logging:
+  print_every_n_frames: 30
+
+profiling:
+  enabled: true
+  output_dir: "outputs/profiling"
+  warmup_frames: 10
+  figure_dpi: 150
