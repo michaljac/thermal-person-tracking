@@ -1,2 +1,6 @@
 models/
 videos/
+experiments/
+test_detector.py
+results/
+src/evaluation/

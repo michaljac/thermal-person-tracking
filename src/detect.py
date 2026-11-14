@@ -1,14 +1,56 @@
 
 import os
 import time
+
 import cv2
 import yaml
-from ultralytics import YOLO
+from src.detectors.factory import create_detector
 
-#from src.time_manager import TimeManager
+def draw_detections(frame, detections, vis_cfg):
+    """
+    Draw person detections on a frame.
+
+    detections: Nx5 array
+        [x1, y1, x2, y2, confidence]
+
+    Returns:
+        Annotated frame.
+    """
+    annotated_frame = frame.copy()
+
+    # OpenCV uses BGR, so red = (0, 0, 255)
+    bbox_color = (0, 0, 255)
+
+    for detection in detections:
+        x1, y1, x2, y2, confidence = detection
+
+        x1, y1, x2, y2 = map(
+            int, (x1, y1, x2, y2)
+        )
+
+        cv2.rectangle(
+            annotated_frame,
+            (x1, y1),
+            (x2, y2),
+            bbox_color,
+            vis_cfg["bbox_thickness"]
+        )
+
+        cv2.putText(
+            annotated_frame,
+            f"Person {confidence:.2f}",
+            (x1, max(20, y1 - 10)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            vis_cfg["font_scale"],
+            bbox_color,
+            vis_cfg["text_thickness"]
+        )
+
+    return annotated_frame
+
 
 def main():
-    # Load configuration directly from YAML
+    # Load configuration
     config_path = os.path.join("config", "config.yaml")
 
     with open(config_path, "r", encoding="utf-8") as file:
@@ -19,28 +61,28 @@ def main():
     video_cfg = config["video"]
     vis_cfg = config["visualization"]
     log_cfg = config["logging"]
-    profiling_cfg = config["profiling"]
+    model_path = paths["model"]
+    model_name = os.path.basename(model_path).lower()
     input_video = paths["input_video"]
-    output_video = paths["output_video"]
+    output_video = os.path.join(
+    output_dir,
+    f"{model_name}.mp4"
+)
 
     if not os.path.isfile(input_video):
         raise FileNotFoundError(
             f"Input video not found: {input_video}"
         )
 
-    os.makedirs(
-        os.path.dirname(output_video),
-        exist_ok=True
+    output_dir = os.path.dirname(output_video)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
+    # Initialize detector once
+    detector = create_detector(
+        model_path=model_path,
+        detector_cfg=detector_cfg
     )
-
-#     profiler = TimeManager(
-#     enabled = profiling_cfg["enabled"],
-#     warmup_frames = profiling_cfg["warmup_frames"]
-# )
-
-
-    # Initialize YOLO detector
-    model = YOLO(paths["model"])
 
     # Open input video
     cap = cv2.VideoCapture(input_video)
@@ -76,6 +118,7 @@ def main():
         )
 
     frame_count = 0
+    total_detections = 0
     start_time = time.perf_counter()
 
     try:
@@ -85,49 +128,27 @@ def main():
             if not success:
                 break
 
-            # Detect persons using YOLO
-            result = model.predict(
+            # 1. Detect persons
+            detections = detector.predict(frame)
+            total_detections += len(detections)
+
+            # 2. Draw detections
+            annotated_frame = draw_detections(
                 frame,
-                classes=detector_cfg["classes"],
-                conf=detector_cfg["confidence_threshold"],
-                imgsz=detector_cfg["image_size"],
-                device=detector_cfg["device"],
-                verbose=False
-            )[0]
+                detections,
+                vis_cfg
+            )
 
-            # Draw bounding boxes
-            for box in result.boxes:
-                x1, y1, x2, y2 = map(
-                    int,
-                    box.xyxy[0].tolist()
-                )
+            # 3. Save annotated frame
+            writer.write(annotated_frame)
 
-                confidence = float(box.conf[0])
-
-                cv2.rectangle(
-                    frame,
-                    (x1, y1),
-                    (x2, y2),
-                    vis_cfg["bbox_color"],
-                    vis_cfg["bbox_thickness"]
-                )
-
-                cv2.putText(
-                    frame,
-                    f"Person {confidence:.2f}",
-                    (x1, max(20, y1 - 10)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    vis_cfg["font_scale"],
-                    vis_cfg["bbox_color"],
-                    vis_cfg["text_thickness"]
-                )
-
-            writer.write(frame)
             frame_count += 1
-            # profiler.next_frame()
 
             if frame_count % log_cfg["print_every_n_frames"] == 0:
-                print(f"Processed {frame_count} frames")
+                print(
+                    f"Processed {frame_count} frames | "
+                    f"Detections: {total_detections}"
+                )
 
     finally:
         cap.release()
@@ -136,6 +157,7 @@ def main():
     elapsed = time.perf_counter() - start_time
 
     print(f"Total frames: {frame_count}")
+    print(f"Total detections: {total_detections}")
     print(f"Total time: {elapsed:.2f}s")
 
     if elapsed > 0:
@@ -145,13 +167,6 @@ def main():
 
     print(f"Output: {os.path.abspath(output_video)}")
 
-    # profiler.print_report()
-
-    # profiler.save_figures(
-    #     output_dir=profiling_cfg["output_dir"],
-    #     dpi=profiling_cfg["figure_dpi"]
-    # )
 
 if __name__ == "__main__":
     main()
-
