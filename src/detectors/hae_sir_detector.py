@@ -2,9 +2,9 @@
 import cv2
 import numpy as np
 import onnxruntime as ort
-import time
+from contextlib import nullcontext
 
-from src.detectors.base import BaseDetector
+from detectors.base import BaseDetector
 
 
 class HAESIRDetector(BaseDetector):
@@ -161,20 +161,18 @@ class HAESIRDetector(BaseDetector):
         return detections[valid]
 
     def predict(self, frame):
-        tensor, original_size, scaled_size = self.preprocess(
-            frame
-        )
+        # A standalone detector also works without a profiling timer.
+        timer = getattr(self, "timer", None)
+        measure = timer.measure if timer is not None else lambda stage: nullcontext()
 
-        outputs = self.session.run(
-            ["cls", "box"],
-            {self.input_info.name: tensor}
-        )
+        with measure("hae_preprocess"):
+            tensor, original_size, scaled_size = self.preprocess(frame)
 
-        cls, box = outputs
+        with measure("hae_inference"):
+            cls, box = self.session.run(
+                ["cls", "box"],
+                {self.input_info.name: tensor}
+            )
 
-        return self.postprocess(
-            cls,
-            box,
-            original_size,
-            scaled_size
-        )
+        with measure("hae_postprocess"):
+            return self.postprocess(cls, box, original_size, scaled_size)

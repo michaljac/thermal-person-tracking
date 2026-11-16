@@ -2,7 +2,7 @@
 import numpy as np
 from ultralytics import YOLO
 
-from src.detectors.base import BaseDetector
+from detectors.base import BaseDetector
 
 
 class YOLODetector(BaseDetector):

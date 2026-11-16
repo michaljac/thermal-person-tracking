@@ -1,8 +1,8 @@
 
 import os
 
-from src.detectors.yolo_detector import YOLODetector
-from src.detectors.hae_sir_detector import HAESIRDetector
+from detectors.yolo_detector import YOLODetector
+from detectors.hae_sir_detector import HAESIRDetector
 
 
 def create_detector(model_path, detector_cfg):
@@ -13,6 +13,8 @@ def create_detector(model_path, detector_cfg):
     if "hae-s-ir" in filename or "hae_s_ir" in filename:
         if extension != ".onnx":
             raise ValueError("HAE-S-IR requires an ONNX model")
+        detector_cfg["confidence_threshold"] = detector_cfg["hae-s-ir_confidence_threshold"]
+        detector_cfg["image_size"] = detector_cfg["hae-s-ir_image_size"]
         return HAESIRDetector(model_path, detector_cfg)
 
     elif extension in (".pt", ".onnx", ".engine"):

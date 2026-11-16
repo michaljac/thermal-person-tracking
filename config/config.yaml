@@ -2,18 +2,20 @@
 paths:
   input_video: "videos/input/input_h264.mp4"
   output_video: "videos/output/hae-s-ir_lwir.onnx.mp4"
-  model: "models/hae-s-ir_lwir_int8.onnx" #"models/hae-s-ir_lwir.onnx" / "models/best_uav_fast.pt"
+  model: "models/hae-s-ir_lwir.onnx" 
+  #"models/hae-s-ir_lwir.onnx" / "models/best_uav_fast.pt"
 
 detector:
-  confidence_threshold: 0.5
-  image_size: 512
+  # yolo
+  confidence_threshold: 0.25 #0.15
+  image_size: 512 #640
   classes: [0]
   device: "cpu"
 
   # hae-s-ir
-  hae_scale: 0.5 #1.5
-
-
+  hae_scale: 1.0
+  hae-s-ir_confidence_threshold: 0.5 #0.3
+  hae-s-ir_image_size: 512
 
 video:
   default_fps: 30.0
@@ -37,5 +39,11 @@ profiling:
 preview:
   num_frames: 6
   frames_per_row: 3
-  frame_width: 400
+  frame_width: 500
   gap: 10
+  min_frame_gap: 15
+
+tracker:
+  max_age: 100 # max number of frame to keep inactive object data
+  n_init: 4 # min number of detected object before open track
+  max_iou_distance: 0.85 #0.7 

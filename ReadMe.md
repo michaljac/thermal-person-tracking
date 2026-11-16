@@ -30,7 +30,7 @@ docker run -it --rm -v "${PWD}:/workspace" -w /workspace thermal-person-tracking
 Place an input video at `videos/input/input.mp4`, then run:
 
 ```bash
-python -m src.detect
+python -m detect
 ```
 
 Detection results are saved to `videos/output/`.

@@ -4,3 +4,5 @@ experiments/
 test_detector.py
 results/
 src/evaluation/
+outputs/
+.vscode/
