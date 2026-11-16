@@ -1,13 +1,14 @@
 
 paths:
   input_video: "videos/input/input_h264.mp4"
-  output_video: "videos/output/hae-s-ir_lwir.onnx.mp4"
-  model: "models/hae-s-ir_lwir.onnx" 
+  model: "models/best_uav_fast.onnx"
+  output_dir: "videos/output"
+  # PyTorch baseline: "models/best_uav_fast.pt" 
   #"models/hae-s-ir_lwir.onnx" / "models/best_uav_fast.pt"
 
 detector:
   # yolo
-  confidence_threshold: 0.25 #0.15
+  confidence_threshold: 0.3 #0.15
   image_size: 512 #640
   classes: [0]
   device: "cpu"
@@ -32,9 +33,7 @@ logging:
 
 profiling:
   enabled: true
-  output_dir: "outputs/profiling"
   warmup_frames: 10
-  figure_dpi: 150
 
 preview:
   num_frames: 6
@@ -45,5 +44,5 @@ preview:
 
 tracker:
   max_age: 100 # max number of frame to keep inactive object data
-  n_init: 4 # min number of detected object before open track
-  max_iou_distance: 0.85 #0.7 
+  n_init: 3 # min number of detected object before open track
+  max_iou_distance: 0.7 #0.7 

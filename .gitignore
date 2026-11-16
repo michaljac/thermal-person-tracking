@@ -1,8 +1,5 @@
 models/
-videos/
-experiments/
+*.mp4
 test_detector.py
-results/
-src/evaluation/
-outputs/
-.vscode/
+onnx_detector.py
+compare_backends.py

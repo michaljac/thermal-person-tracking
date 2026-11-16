@@ -9,84 +9,23 @@ from time_manager import TimeManager
 from detectors.factory import create_detector
 # from deep_sort.deep_sort.tracker import Tracker
 from deep_sort_realtime.deepsort_tracker import DeepSort
+from utils_dir.utils import *
 # from deep_sort.deep_sort.tracker import DeepSortTracker
 
-def draw_detections(frame, detections, vis_cfg):
-    """
-    Draw person detections on a frame.
-
-    detections: Nx5 array
-        [x1, y1, x2, y2, confidence]
-
-    Returns:
-        Annotated frame.
-    """
-    annotated_frame = frame.copy()
-
-    # OpenCV uses BGR, so red = (0, 0, 255)
-    bbox_color = (0, 0, 255)
-
-    for detection in detections:
-        x1, y1, x2, y2, confidence = detection
-
-        x1, y1, x2, y2 = map(
-            int, (x1, y1, x2, y2)
-        )
-
-        cv2.rectangle(
-            annotated_frame,
-            (x1, y1),
-            (x2, y2),
-            bbox_color,
-            vis_cfg["bbox_thickness"]
-        )
-
-        cv2.putText(
-            annotated_frame,
-            f"Person {confidence:.2f}",
-            (x1, max(20, y1 - 10)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            vis_cfg["font_scale"],
-            bbox_color,
-            vis_cfg["text_thickness"]
-        )
-
-    return annotated_frame
-
-def draw_tracks(frame, tracks):
-    annotated = frame.copy()
-
-    for x1, y1, x2, y2, track_id in tracks:
-        x1, y1, x2, y2, track_id = map(
-            int, [x1, y1, x2, y2, track_id]
-        )
-
-        cv2.rectangle(
-            annotated,
-            (x1, y1),
-            (x2, y2),
-            (0, 255, 0),
-            2
-        )
-
-        cv2.putText(
-            annotated,
-            f"ID {track_id}",
-            (x1, max(y1 - 10, 15)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 0),
-            2
-        )
-
-    return annotated
-
-def main():
+def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
+         max_frames=None, benchmark=False, warmup_override=None):
+    
     # Load configuration
-    config_path = os.path.join("config", "config.yaml")
-
     with open(config_path, "r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
+
+    if model_override is not None:
+        config["paths"]["model"] = model_override
+    if benchmark:
+        config.setdefault("profiling", {})["enabled"] = True
+
+    if warmup_override is not None:
+        config.setdefault("profiling", {})["warmup_frames"] = warmup_override
 
     paths = config["paths"]
     detector_cfg = config["detector"]
@@ -94,34 +33,36 @@ def main():
     vis_cfg = config["visualization"]
     log_cfg = config["logging"]
     profile_cfg = config.get("profiling", {})
+    model_path = paths["model"]
+    input_video = paths["input_video"]
+
+    output_dir = config["paths"]["output_dir"]
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Profiling timer
     timer = TimeManager(
         enabled=profile_cfg.get("enabled", False),
         warmup_frames=profile_cfg.get("warmup_frames", 0),
     )
-    model_path = paths["model"]
-    model_name = os.path.basename(model_path).lower()
-    input_video = paths["input_video"]
-    output_dir = os.path.dirname(paths["output_video"])
 
-    # Create directory if needed
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Get model filename without extension
-    model_name = os.path.splitext(
-        os.path.basename(paths["model"])
-    )[0]
-
-    # Generate output filename based on model
-    output_video = os.path.join(
-        output_dir,
-        f"{model_name}.mp4"
-    )
+    if benchmark:
+        # Get model filename without extension, plus backend suffix
+        model_name = os.path.splitext(os.path.basename(model_path))[0]
+        model_name += "_" + os.path.splitext(model_path)[1].lstrip(".")
 
     # Initialize detector
     detector = create_detector(
         model_path=model_path,
         detector_cfg=detector_cfg
     )
+    # Build output filename
+    output_video = build_output_video_path(
+        output_dir,
+        model_path,
+        detector_cfg["image_size"],
+        detector_cfg["confidence_threshold"],
+    )
+
     # Share the timer for detailed HAE preprocessing/inference timings.
     detector.timer = timer
 
@@ -171,7 +112,7 @@ def main():
     start_time = time.perf_counter()
 
     try:
-        while True:
+        while max_frames is None or frame_count < max_frames:
             with timer.measure("total_frame"):
                 with timer.measure("video_read"):
                     success, frame = cap.read()
@@ -215,14 +156,14 @@ def main():
     finally:
         cap.release()
         writer.release()
+        elapsed = time.perf_counter() - start_time
+        
+        # The failed end-of-video read is not a processed frame.
+        for stage in ("total_frame", "video_read"):
+            if timer.timings[stage] and timer.timings[stage][-1][0] == timer.frame_index:
+                timer.timings[stage].pop()
         if timer.enabled:
             timer.print_report()
-            timer.save_figures(
-                profile_cfg.get("output_dir", "outputs/profiling"),
-                dpi=profile_cfg.get("figure_dpi", 150),
-            )
-
-    elapsed = time.perf_counter() - start_time
 
     print(f"Total frames: {frame_count}")
     print(f"Total detections: {total_detections}")
@@ -233,7 +174,8 @@ def main():
             f"Processing FPS: {frame_count / elapsed:.2f}"
         )
 
-    print(f"Output: {os.path.abspath(output_video)}")
+    print(f"Output video saved to: {os.path.abspath(output_video)}")
+    return timer.get_stats()
 
 
 if __name__ == "__main__":
