@@ -5,7 +5,9 @@ import numpy as np
 
 import cv2
 import yaml
+from tqdm import tqdm
 from time_manager import TimeManager
+from preprocess import ThermalPreprocessor
 from detectors.factory import create_detector
 # from deep_sort.deep_sort.tracker import Tracker
 from deep_sort_realtime.deepsort_tracker import DeepSort
@@ -31,8 +33,8 @@ def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
     detector_cfg = config["detector"]
     video_cfg = config["video"]
     vis_cfg = config["visualization"]
-    log_cfg = config["logging"]
     profile_cfg = config.get("profiling", {})
+    max_frames = get_max_frames(config.get("run", {}), max_frames)
     model_path = paths["model"]
     input_video = paths["input_video"]
 
@@ -61,18 +63,26 @@ def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
         model_path,
         detector_cfg["image_size"],
         detector_cfg["confidence_threshold"],
+        max_frames,
     )
 
     # Share the timer for detailed HAE preprocessing/inference timings.
     detector.timer = timer
 
+    # Optional thermal contrast enhancement (mode "none" = no-op)
+    preprocessor = ThermalPreprocessor(config.get("preprocessing", {}))
+
     # Initalize tracker
+    tracker_cfg = config["tracker"]
     tracker = DeepSort(
-        max_age=config["tracker"]["max_age"],
-        n_init=config["tracker"]["n_init"],
-        max_iou_distance=config["tracker"]["max_iou_distance"],
+        max_age=tracker_cfg["max_age"],
+        n_init=tracker_cfg["n_init"],
+        max_iou_distance=tracker_cfg["max_iou_distance"],
+        max_cosine_distance=tracker_cfg.get("max_cosine_distance", 0.2),
+        nn_budget=tracker_cfg.get("nn_budget"),
         embedder_gpu=False,
     )
+    track_log = []  # MOT format rows: frame, id, left, top, width, height
 
     # Open input video
     cap = cv2.VideoCapture(input_video)
@@ -109,6 +119,14 @@ def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
 
     frame_count = 0
     total_detections = 0
+
+    video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or None
+    total_frames = video_frames
+    if max_frames is not None:
+        total_frames = min(max_frames, video_frames) if video_frames else max_frames
+        print(f"Test mode: processing {total_frames} frames")
+    progress = tqdm(total=total_frames, desc="Tracking", unit="frame")
+
     start_time = time.perf_counter()
 
     try:
@@ -120,8 +138,11 @@ def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
                 if not success:
                     break
 
+                with timer.measure("preprocess"):
+                    model_input = preprocessor.process(frame)
+
                 with timer.measure("detection"):
-                    detections = detector.predict(frame)
+                    detections = detector.predict(model_input)
                 total_detections += len(detections)
 
                 with timer.measure("tracking"):
@@ -137,6 +158,10 @@ def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
                         for track in updated_tracks
                         if track.is_confirmed() and track.time_since_update == 0
                     ]
+                    for x1, y1, x2, y2, track_id in tracks:
+                        track_log.append(
+                            (frame_count + 1, track_id, x1, y1, x2 - x1, y2 - y1)
+                        )
 
                 with timer.measure("drawing"):
                     annotated_frame = draw_detections(frame, detections, vis_cfg)
@@ -146,14 +171,12 @@ def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
                     writer.write(annotated_frame)
 
                 frame_count += 1
-                if frame_count % log_cfg["print_every_n_frames"] == 0:
-                    print(
-                        f"Processed {frame_count} frames | "
-                        f"Detections: {total_detections}"
-                    )
+                progress.update(1)
+                progress.set_postfix(detections=total_detections, tracks=len(tracks))
             timer.next_frame()
 
     finally:
+        progress.close()
         cap.release()
         writer.release()
         elapsed = time.perf_counter() - start_time
@@ -174,7 +197,11 @@ def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
             f"Processing FPS: {frame_count / elapsed:.2f}"
         )
 
+    track_log_path = os.path.splitext(output_video)[0] + "_tracks.txt"
+    save_tracks_mot(track_log_path, track_log)
+
     print(f"Output video saved to: {os.path.abspath(output_video)}")
+    print(f"Track log saved to: {os.path.abspath(track_log_path)}")
     return timer.get_stats()
 
 

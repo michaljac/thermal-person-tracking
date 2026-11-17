@@ -1,24 +1,24 @@
 
-import os
-
 import cv2
-import yaml
 
 
 class ThermalPreprocessor:
-    def __init__(self):
-        config_path = os.path.join("config", "config.yaml")
+    """
+    Optional thermal contrast enhancement applied before detection.
 
-        with open(config_path, "r", encoding="utf-8") as file:
-            config = yaml.safe_load(file)
+    params (config "preprocessing" section):
+        mode: none | clahe | inverted | clahe_inverted
+        clahe_clip_limit: float
+        clahe_tile_grid_size: [w, h]
+    """
 
-        params = config["preprocessing"]
-        self.mode = params["mode"]
+    def __init__(self, params):
+        self.mode = params.get("mode", "none")
 
         self.clahe = cv2.createCLAHE(
-            clipLimit=params["clahe_clip_limit"],
+            clipLimit=params.get("clahe_clip_limit", 2.0),
             tileGridSize=tuple(
-                params["clahe_tile_grid_size"]
+                params.get("clahe_tile_grid_size", [8, 8])
             )
         )
 

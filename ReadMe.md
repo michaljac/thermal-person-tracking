@@ -27,13 +27,15 @@ Run the container with the project mounted:
 docker run -it --rm -v "${PWD}:/workspace" -w /workspace thermal-person-tracking:cpu bash
 ```
 
-Place an input video at `videos/input/input.mp4`, then run:
+Place an input video at the path set in `paths.input_video` (default `videos/input/input_h264.mp4`), then run from the project root:
 
 ```bash
-python -m detect
+python src/detect.py
 ```
 
-Detection results are saved to `videos/output/`.
+The annotated video is saved to `paths.output_dir` as `<model>_<backend>_img<size>_conf<conf>.mp4`. Test runs get a `_test<N>` suffix.
 
 ## Configuration
-Model settings, file paths, and detection parameters are managed through `config/config.yaml`.
+Model settings, file paths, detection and tracker parameters are managed through `config/config.yaml`.
+
+For a quick check, `run.test_mode: true` processes only the first `run.test_num_frames` frames (default 50). Set `test_mode: false` to process the whole video.

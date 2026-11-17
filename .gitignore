@@ -3,3 +3,6 @@ models/
 test_detector.py
 onnx_detector.py
 compare_backends.py
+design.md
+results/
+videos/

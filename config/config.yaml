@@ -1,22 +1,29 @@
 
 paths:
   input_video: "videos/input/input_h264.mp4"
-  model: "models/best_uav_fast.onnx"
+  model: "models/best_uav_fast_640x384.onnx"
   output_dir: "videos/output"
-  # PyTorch baseline: "models/best_uav_fast.pt" 
+  # Previous baseline: "models/best_uav_fast.onnx" with image_size 512 (square)
   #"models/hae-s-ir_lwir.onnx" / "models/best_uav_fast.pt"
 
 detector:
   # yolo
   confidence_threshold: 0.3 #0.15
-  image_size: 512 #640
+  # Static ONNX models must use the exact export size: [height, width].
+  # 640x384 keeps the portrait video's aspect ratio (no square padding).
+  image_size: [640, 384]
   classes: [0]
   device: "cpu"
 
   # hae-s-ir
-  hae_scale: 1.0
   hae-s-ir_confidence_threshold: 0.5 #0.3
-  hae-s-ir_image_size: 512
+  hae-s-ir_image_size: 512 # longer frame side after resize; null = use hae_scale
+  hae_scale: 1.0 # only used when hae-s-ir_image_size is null
+
+preprocessing:
+  mode: "none" # none | clahe | inverted | clahe_inverted
+  clahe_clip_limit: 2.0
+  clahe_tile_grid_size: [8, 8]
 
 video:
   default_fps: 30.0
@@ -28,8 +35,11 @@ visualization:
   font_scale: 0.6
   text_thickness: 2
 
-logging:
-  print_every_n_frames: 500
+run:
+  # Quick test: process only the first `test_num_frames` frames.
+  # Set test_mode: false to process the whole video.
+  test_mode: true
+  test_num_frames: 50
 
 profiling:
   enabled: true
@@ -45,4 +55,6 @@ preview:
 tracker:
   max_age: 100 # max number of frame to keep inactive object data
   n_init: 3 # min number of detected object before open track
-  max_iou_distance: 0.7 #0.7 
+  max_iou_distance: 0.7 #0.7
+  max_cosine_distance: 0.2 # appearance match threshold (lower = stricter)
+  nn_budget: 100 # max stored appearance vectors per track (null = unlimited) 

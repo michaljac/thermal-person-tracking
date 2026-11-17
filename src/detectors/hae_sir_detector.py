@@ -14,7 +14,10 @@ class HAESIRDetector(BaseDetector):
         self.conf_threshold = float(
             detector_cfg["confidence_threshold"]
         )
-        self.scale = float(detector_cfg.get("hae_scale", 1.5))
+        # image_size = target length of the frame's longer side (like YOLO imgsz).
+        # Falls back to a fixed hae_scale when image_size is not set.
+        self.image_size = detector_cfg.get("image_size")
+        self.scale = float(detector_cfg.get("hae_scale", 1.0))
         self.stride = 4
 
         self.session = ort.InferenceSession(
@@ -61,8 +64,12 @@ class HAESIRDetector(BaseDetector):
 
         original_h, original_w = gray.shape
 
-        scaled_w = int(round(original_w * self.scale))
-        scaled_h = int(round(original_h * self.scale))
+        scale = self.scale
+        if self.image_size:
+            scale = float(self.image_size) / max(original_h, original_w)
+
+        scaled_w = int(round(original_w * scale))
+        scaled_h = int(round(original_h * scale))
 
         scaled = cv2.resize(
             gray,
