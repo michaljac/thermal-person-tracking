@@ -200,6 +200,15 @@ def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
     track_log_path = os.path.splitext(output_video)[0] + "_tracks.txt"
     save_tracks_mot(track_log_path, track_log)
 
+    track_stats = compute_track_stats(track_log, frame_count, fps)
+    print(
+        f"Tracks: {track_stats['unique_ids']} IDs | "
+        f"mean length {track_stats['mean_track_s']:.1f}s | "
+        f"short (<0.5s) {track_stats['short_tracks']:.0%} | "
+        f"gaps recovered {track_stats['gaps_recovered']} | "
+        f"coverage {track_stats['coverage']:.0%}"
+    )
+
     print(f"Output video saved to: {os.path.abspath(output_video)}")
     print(f"Track log saved to: {os.path.abspath(track_log_path)}")
     return timer.get_stats()

@@ -37,6 +37,53 @@ def save_tracks_mot(path, track_log):
             )
 
 
+def compute_track_stats(track_log, total_frames, fps, short_track_s=0.5):
+    """
+    Label-free tracking metrics from a track log [(frame, id, ...), ...].
+
+    unique_ids:      number of distinct IDs (fewer = less fragmentation)
+    mean_track_s:    mean time span of a track, first to last frame (s)
+    short_tracks:    share of IDs living < short_track_s (likely false alarms or fragments)
+    gaps_recovered:  times a track disappeared and came back with the SAME ID
+                     (identity kept through a miss / occlusion)
+    coverage:        share of frames with at least one confirmed track
+    """
+    spans = {}
+    frames_by_id = {}
+    for frame, track_id, *_ in track_log:
+        frames_by_id.setdefault(track_id, []).append(frame)
+    for track_id, frames in frames_by_id.items():
+        frames.sort()
+        spans[track_id] = frames
+    if not spans:
+        return {"unique_ids": 0, "mean_track_s": 0.0, "short_tracks": 0.0,
+                "gaps_recovered": 0, "coverage": 0.0}
+
+    lengths_s = [(f[-1] - f[0] + 1) / fps for f in spans.values()]
+    gaps = sum(
+        sum(1 for a, b in zip(f, f[1:]) if b - a > 1) for f in spans.values()
+    )
+    covered = len({frame for frame, *_ in track_log})
+    return {
+        "unique_ids": len(spans),
+        "mean_track_s": sum(lengths_s) / len(lengths_s),
+        "short_tracks": sum(l < short_track_s for l in lengths_s) / len(lengths_s),
+        "gaps_recovered": gaps,
+        "coverage": covered / max(total_frames, 1),
+    }
+
+
+def load_tracks_mot(path):
+    """Read a MOT track log back into [(frame, id, left, top, width, height), ...]."""
+    rows = []
+    with open(path, encoding="utf-8") as file:
+        for line in file:
+            v = line.strip().split(",")
+            if len(v) >= 6:
+                rows.append((int(v[0]), int(v[1]), *map(float, v[2:6])))
+    return rows
+
+
 def get_max_frames(run_cfg, max_frames=None):
     """
     Decide how many frames to process.
