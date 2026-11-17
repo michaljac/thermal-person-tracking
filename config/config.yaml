@@ -17,7 +17,7 @@ detector:
 
   # hae-s-ir
   hae-s-ir_confidence_threshold: 0.5 #0.3
-  hae-s-ir_image_size: 512 # longer frame side after resize; null = use hae_scale
+  hae-s-ir_image_size: 1024 # longer frame side after resize; null = use hae_scale
   hae_scale: 1.0 # only used when hae-s-ir_image_size is null
 
 preprocessing:
@@ -53,8 +53,27 @@ preview:
   min_frame_gap: 15
 
 tracker:
-  max_age: 100 # max number of frame to keep inactive object data
-  n_init: 3 # min number of detected object before open track
-  max_iou_distance: 0.7 #0.7
-  max_cosine_distance: 0.2 # appearance match threshold (lower = stricter)
-  nn_budget: 100 # max stored appearance vectors per track (null = unlimited) 
+  type: "botsort" # botsort | deepsort
+
+  # BoT-SORT: camera-motion compensation + two-stage matching, no appearance model.
+  # The detector's confidence_threshold must be <= track_low_thresh,
+  # otherwise the low-score second stage receives nothing.
+  botsort:
+    track_high_thresh: 0.3 # first-stage matching + drawn detections
+    track_low_thresh: 0.1 # second stage: low scores may only extend existing tracks
+    new_track_thresh: 0.5 # minimum score to START a track (0.3 -> 13 IDs, 0.5 -> 9 IDs)
+    min_hits: 3 # report a track only after 3 matches (like DeepSORT n_init)
+    match_buffer: 1.0 # buffered IoU: enlarge boxes x3 for matching (tiny targets)
+    track_buffer: 90 # frames to keep a lost track (3 s at 30 FPS)
+    match_thresh: 0.8 # max IoU-cost to accept a match
+    fuse_score: true # combine IoU with detection score
+    gmc_method: "sparseOptFlow" # camera-motion compensation: sparseOptFlow | orb | none
+    gmc_downscale: 4 # estimate camera motion on a 1/4-size frame (2 = Ultralytics default, ~2x slower)
+
+  # DeepSORT (previous tracker; Kalman + MobileNetV2 appearance + IoU)
+  deepsort:
+    max_age: 100 # max number of frame to keep inactive object data
+    n_init: 3 # min number of detected object before open track
+    max_iou_distance: 0.7 #0.7
+    max_cosine_distance: 0.2 # appearance match threshold (lower = stricter)
+    nn_budget: 100 # max stored appearance vectors per track (null = unlimited)
