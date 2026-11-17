@@ -38,7 +38,7 @@ visualization:
 run:
   # Quick test: process only the first `test_num_frames` frames.
   # Set test_mode: false to process the whole video.
-  test_mode: true
+  test_mode: false
   test_num_frames: 50
 
 profiling:
@@ -64,6 +64,34 @@ tracker:
     new_track_thresh: 0.5 # minimum score to START a track (0.3 -> 13 IDs, 0.5 -> 9 IDs)
     min_hits: 3 # report a track only after 3 matches (like DeepSORT n_init)
     match_buffer: 1.0 # buffered IoU: enlarge boxes x3 for matching (tiny targets)
+    # Re-link a new track to a recently lost one (bush / detector miss), keeping the old ID.
+    # The lost track's "ghost" moves with the camera + its own decaying velocity.
+    relink:
+      enabled: true
+      max_gap_s: 8 # longest gap that can be bridged (bush case in the video: 7.4 s)
+      gate_px: 60 # match radius at gap 0 ...
+      gate_growth_px_per_s: 120 # ... growing with the gap (uncertainty)
+      velocity_decay: 0.97 # per frame; people often stop behind cover
+      min_direction_cos: -0.2 # reject candidates clearly behind the walking direction
+      direction_weight: 0.5
+      max_size_ratio: 2.5 # box area ratio old vs new
+      appearance: "mobilenet" # mobilenet | none: embedding as a safety check against wrong merges
+      max_appearance_dist: 0.35 # cosine distance (same person after the bush gap: 0.24)
+      appearance_weight: 1.0
+      embed_every: 5 # refresh a track's embedding every N frames
+      # Target of interest (the walking person) is always shown as ID 1.
+      target:
+        enabled: true
+        min_hits: 10 # evidence needed before a track can become the target
+        # Score = persistence + near image center + ground speed (each 0..1).
+        # Static object far from center ~0.7; walking, camera-centered target ~1.1+
+        lock_score: 1.0
+        min_speed_px_s: 40 # speed term reaches 1 at 3x this (camera motion removed)
+        reacquire_after_s: 3 # target lost this long -> may lock a new candidate
+        # The camera follows the target, so its ghost stays fixed in the image:
+        gate_px: 150
+        gate_growth_px_per_s: 60
+        max_gap_s: 15
     track_buffer: 90 # frames to keep a lost track (3 s at 30 FPS)
     match_thresh: 0.8 # max IoU-cost to accept a match
     fuse_score: true # combine IoU with detection score

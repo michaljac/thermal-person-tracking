@@ -154,6 +154,8 @@ def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
                 with timer.measure("tracking"):
                     tracks = tracker.update(detections, frame)
                     for x1, y1, x2, y2, track_id in tracks:
+                        if track_id == 0:
+                            continue  # tentative track (not enough evidence yet)
                         track_log.append(
                             (frame_count + 1, track_id, x1, y1, x2 - x1, y2 - y1)
                         )
@@ -203,6 +205,10 @@ def main(config_path=os.path.join("config", "config.yaml"), model_override=None,
         f"short (<0.5s) {track_stats['short_tracks']:.0%} | "
         f"gaps recovered {track_stats['gaps_recovered']} | "
         f"coverage {track_stats['coverage']:.0%}"
+    )
+    print(
+        f"Target (ID 1): shown in {track_stats['id1_frames']} frames | "
+        f"span {track_stats['id1_span_s']:.1f}s"
     )
 
     print(f"Output video saved to: {os.path.abspath(output_video)}")

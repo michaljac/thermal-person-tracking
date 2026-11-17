@@ -18,7 +18,9 @@ def build_output_video_path(output_dir, model_path, image_size, confidence,
     backend = extension.lstrip(".")
     if isinstance(image_size, (list, tuple)):
         image_size = "x".join(str(s) for s in image_size)  # [640, 384] -> 640x384
-    filename = f"{model_stem}_{backend}_img{image_size}_conf{confidence}"
+    # Show the image size once: skip "_img<size>" if the model name already has it
+    size_part = "" if str(image_size) in model_stem else f"_img{image_size}"
+    filename = f"{model_stem}_{backend}{size_part}_conf{confidence}"
     if max_frames is not None:
         filename += f"_test{max_frames}"
     return os.path.join(output_dir, filename + ".mp4")
@@ -57,19 +59,23 @@ def compute_track_stats(track_log, total_frames, fps, short_track_s=0.5):
         spans[track_id] = frames
     if not spans:
         return {"unique_ids": 0, "mean_track_s": 0.0, "short_tracks": 0.0,
-                "gaps_recovered": 0, "coverage": 0.0}
+                "gaps_recovered": 0, "coverage": 0.0, "id1_frames": 0, "id1_span_s": 0.0}
 
     lengths_s = [(f[-1] - f[0] + 1) / fps for f in spans.values()]
     gaps = sum(
         sum(1 for a, b in zip(f, f[1:]) if b - a > 1) for f in spans.values()
     )
     covered = len({frame for frame, *_ in track_log})
+    target_frames = spans.get(1, [])
     return {
         "unique_ids": len(spans),
         "mean_track_s": sum(lengths_s) / len(lengths_s),
         "short_tracks": sum(l < short_track_s for l in lengths_s) / len(lengths_s),
         "gaps_recovered": gaps,
         "coverage": covered / max(total_frames, 1),
+        # Target (ID 1): frames where it is shown, and its first-to-last span
+        "id1_frames": len(target_frames),
+        "id1_span_s": (target_frames[-1] - target_frames[0] + 1) / fps if target_frames else 0.0,
     }
 
 
@@ -167,7 +173,7 @@ def draw_tracks(frame, tracks):
 
         cv2.putText(
             annotated,
-            f"ID {track_id}",
+            f"ID {track_id}" if track_id > 0 else "?",  # 0 = tentative track
             (x1, max(y1 - 10, 15)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
