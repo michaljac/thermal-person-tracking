@@ -6,6 +6,10 @@ class ThermalPreprocessor:
     """
     Optional thermal contrast enhancement applied before detection.
 
+    Off by default (mode "none"): on this video CLAHE halved detection recall
+    (0.58 -> 0.30), because it brightens the background around the warm person
+    and the detector was trained on unprocessed frames.
+
     params (config "preprocessing" section):
         mode: none | clahe | inverted | clahe_inverted
         clahe_clip_limit: float

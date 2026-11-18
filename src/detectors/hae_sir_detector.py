@@ -8,9 +8,16 @@ from detectors.base import BaseDetector
 
 
 class HAESIRDetector(BaseDetector):
+    """
+    HAE-S-IR: tiny (0.31 M params) heat-map person detector trained on thermal
+    drone data (HIT-UAV). Outputs a stride-4 "person center" map (cls) and
+    distances to the box edges (box); peaks are picked with a 3x3 max filter,
+    so no NMS is needed. Runs with ONNX Runtime on CPU.
+
+    Alternative to YOLO; not the default (see design.md, Section 2).
+    """
 
     def __init__(self, model_path, detector_cfg):
-        self.cfg = detector_cfg
         self.conf_threshold = float(
             detector_cfg["confidence_threshold"]
         )
